@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>الرياضيات الممتعة - المعلمة أريج شديد الرفاعي</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        cairo: ['Cairo', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Cairo', sans-serif;
+            background: linear-gradient(135deg, #a7f3d0 0%, #bfdbfe 35%, #fbcfe8 70%, #fef08a 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            border: 3px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+        .btn-hover {
+            transition: all 0.2s ease;
+        }
+        .btn-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        .confetti-piece {
+            position: fixed;
+            top: -20px;
+            width: 10px;
+            height: 14px;
+            z-index: 9999;
+            pointer-events: none;
+            opacity: 0.95;
+            animation: confettiFall linear forwards;
+        }
+        @keyframes confettiFall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(110vh) rotate(720deg); }
+        }
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #printable-certificate, #printable-certificate * {
+                visibility: visible;
+            }
+            #printable-certificate {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="p-4 flex flex-col items-center justify-between min-h-screen">
+
+    <div class="w-full max-w-md mx-auto my-auto" id="app"></div>
+
+    <footer class="w-full text-center py-3 mt-4 text-xs font-black text-purple-900 bg-white/60 backdrop-blur-md rounded-2xl border border-purple-200 shadow-sm no-print">
+        جميع الحقوق محفوظة © تصميم الموقع التفاعلي التعليمي بواسطة المعلمة / أريج شديد الرفاعي
+    </footer>
+
+    <script>
+        let state = {
+            screen: 'welcome',
+            playerName: '',
+            totalStars: 0,
+            currentCategory: '',
+            categoryTitle: '',
+            errorMsg: '',
+            soundEnabled: true,
+            settings: {
+                difficulty: 'easy',
+                qType: 'choice',
+                numFormat: 'ar',
+                count: 10,
+                customMin: 1,
+                customMax: 20
+            },
+            gameData: {
+                currentIndex: 0,
+                score: 0,
+                questions: [],
+                feedback: null
+            }
+        };
+
+        function playSound(type) {
+            if (!state.soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                if (type === 'correct') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+                    osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
+                    osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.4);
+                } else if (type === 'wrong') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(300, ctx.currentTime);
+                    osc.frequency.linearRampToValueAtTime(200, ctx.currentTime + 0.3);
+                    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.35);
+                } else if (type === 'win') {
+                    osc.type = 'sine';
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        osc.frequency.setValueAtTime(freq, ctx.currentTime + idx * 0.12);
+                    });
+                    gain.gain.setValueAtTime(0.25, ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
+                    osc.start();
+                    osc.stop(ctx.currentTime + 0.6);
+                }
+            } catch (e) {}
+        }
+
+        const STICKERS = [
+            { stars: 5, emoji: '🐣', name: 'كتكوت' },
+            { stars: 10, emoji: '🐰', name: 'أرنب' },
+            { stars: 25, emoji: '🦁', name: 'أسد' },
+            { stars: 50, emoji: '🦄', name: 'وحيد القرن' },
+            { stars: 100, emoji: '🐉', name: 'تنين' }
+        ];
+
+        function readProgress() {
+            try {
+                const d = JSON.parse(localStorage.getItem('mathfun_progress') || '{}');
+                if (!d.players) d.players = {};
+                return d;
+            } catch (e) {
+                return { players: {} };
+            }
+        }
+
+        function saveProgress() {
+            try {
+                const d = readProgress();
+                d.lastName = state.playerName;
+                d.soundEnabled = state.soundEnabled;
+                if (state.playerName) d.players[state.playerName] = state.totalStars;
+                localStorage.setItem('mathfun_progress', JSON.stringify(d));
+            } catch (e) {}
+        }
+
+        function loadProgress() {
+            const d = readProgress();
+            if (d.lastName) state.playerName = d.lastName;
+            if (d.soundEnabled === false) state.soundEnabled = false;
+        }
+
+        function checkStickers() {
+            const s = STICKERS.find(x => x.stars === state.totalStars);
+            if (s) state.newSticker = s;
+        }
+
+        function stickersHTML() {
+            const unlocked = STICKERS.filter(s => state.totalStars >= s.stars).length;
+            const next = STICKERS.find(s => state.totalStars < s.stars);
+            const items = STICKERS.map(s => {
+                const ok = state.totalStars >= s.stars;
+                return `<div class="w-10 h-10 rounded-full flex items-center justify-center text-xl ${ok ? 'bg-amber-100 border-2 border-amber-300' : 'bg-gray-100 border-2 border-gray-200 opacity-60'}" title="${s.name} - ${fmtNum(s.stars)} نجمة">${ok ? s.emoji : '🔒'}</div>`;
+            }).join('');
+            const hint = next
+                ? `باقي ${fmtNum(next.stars - state.totalStars)} نجوم لملصق جديد 🎁`
+                : 'جمعت كل الملصقات، أنت بطل البطلات! 🏆';
+            return `
+                <div class="mb-4 bg-white/70 border border-purple-200 rounded-2xl p-3">
+                    <p class="text-xs font-black text-purple-800 mb-2">ملصقاتي (${fmtNum(unlocked)} من ${fmtNum(STICKERS.length)})</p>
+                    <div class="flex justify-center gap-2 mb-2">${items}</div>
+                    <p class="text-[11px] font-bold text-gray-600">${hint}</p>
+                </div>`;
+        }
+
+        function launchConfetti(n) {
+            const colors = ['#a855f7', '#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#facc15'];
+            for (let i = 0; i < n; i++) {
+                const p = document.createElement('div');
+                p.className = 'confetti-piece';
+                p.style.left = Math.random() * 100 + 'vw';
+                p.style.background = colors[Math.floor(Math.random() * colors.length)];
+                p.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+                p.style.animationDuration = (1.8 + Math.random() * 1.8) + 's';
+                p.style.animationDelay = (Math.random() * 0.4) + 's';
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 4500);
+            }
+        }
+
+        function speakQuestion() {
+            if (!('speechSynthesis' in window)) return;
+            const q = state.gameData.questions[state.gameData.currentIndex];
+            if (!q) return;
+            const arNums = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+            let t = q.questionText
+                .replace(/[٠-٩]/g, d => arNums[d])
+                .replace(/\+/g, ' زائد ')
+                .replace(/-/g, ' ناقص ')
+                .replace(/×/g, ' ضرب ')
+                .replace(/÷/g, ' قسمة على ')
+                .replace(/=/g, ' يساوي ');
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(t);
+            u.lang = 'ar-SA';
+            u.rate = 0.85;
+            window.speechSynthesis.speak(u);
+        }
+
+        function fractionSVG(num, d) {
+            const c = 70, r = 60;
+            let s = '<svg viewBox="0 0 140 140" class="w-32 h-32 mx-auto mt-3">';
+            for (let i = 0; i < d; i++) {
+                const a0 = -Math.PI / 2 + (i * 2 * Math.PI) / d;
+                const a1 = -Math.PI / 2 + ((i + 1) * 2 * Math.PI) / d;
+                const x0 = c + r * Math.cos(a0), y0 = c + r * Math.sin(a0);
+                const x1 = c + r * Math.cos(a1), y1 = c + r * Math.sin(a1);
+                const fill = i < num ? '#a855f7' : '#ffffff';
+                s += `<path d="M ${c} ${c} L ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1} Z" fill="${fill}" stroke="#6b21a8" stroke-width="3" stroke-linejoin="round"/>`;
+            }
+            s += '</svg>';
+            return s;
+        }
+
+        function compareLabel(code) {
+            return { 1: 'أكبر من', 2: 'أصغر من', 3: 'يساوي' }[code];
+        }
+
+        function fmtNum(num) {
+            if (state.settings.numFormat === 'en') return num.toString();
+            const arNums = ['٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩'];
+            return num.toString().replace(/\d/g, d => arNums[d]);
+        }
+
+        function parseArNum(str) {
+            const arNums = {'٠':'0','١':'1','٢':'2','٣':'3','٤':'4','٥':'5','٦':'6','٧':'7','٨':'8','٩':'9'};
+            let converted = str.replace(/[٠-٩]/g, d => arNums[d]);
+            return parseInt(converted, 10);
+        }
+
+        function toggleSound() {
+            state.soundEnabled = !state.soundEnabled;
+            saveProgress();
+            render();
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            app.innerHTML = '';
+
+            if (state.screen === 'welcome') {
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-8 text-center animate-pop relative">
+                        <button onclick="toggleSound()" class="absolute top-4 left-4 text-xl bg-purple-100 p-2 rounded-full" title="الصوت">
+                            ${state.soundEnabled ? '🔊' : '🔇'}
+                        </button>
+                        <div class="text-5xl mb-4">🌈 ⭐ 🧸 🎈</div>
+                        <h1 class="text-3xl font-black text-purple-700 mb-2">الرياضيات الممتعة</h1>
+                        <p class="text-gray-600 font-semibold mb-6">نتعلم ونلعب ونبدع مع الأرقام<br>رحلة ممتعة لنجوم الرياضيات</p>
+                        
+                        <div class="space-y-4">
+                            <input type="text" id="playerNameInput" placeholder="اكتب اسمك هنا يا بطل..." 
+                                class="w-full px-5 py-4 rounded-2xl border-2 border-purple-300 focus:border-purple-600 focus:outline-none text-center text-lg font-bold text-purple-900 bg-purple-50/70"
+                                value="${state.playerName}">
+                            ${state.errorMsg ? `<p class="text-red-500 text-sm font-bold">${state.errorMsg}</p>` : ''}
+                            <button onclick="startJourney()" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-black text-xl btn-hover shadow-lg shadow-purple-300">
+                                ابدأ الرحلة الجميلة 🚀
+                            </button>
+                        </div>
+                        <div class="mt-6 text-xs font-black text-purple-700 bg-purple-100 py-2.5 px-4 rounded-xl border border-purple-200">
+                            إعداد المعلمة / أريج شديد الرفاعي
+                        </div>
+                    </div>
+                `;
+            } else if (state.screen === 'categories') {
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-6 text-center animate-pop">
+                        <div class="flex justify-between items-center mb-5 bg-purple-100/70 p-3 rounded-2xl border border-purple-200">
+                            <span class="font-black text-purple-900 text-base">مرحبًا ${state.playerName} 🌷</span>
+                            <div class="flex items-center gap-2">
+                                <button onclick="toggleSound()" class="text-base bg-white px-2 py-1 rounded-full shadow-sm">${state.soundEnabled ? '🔊' : '🔇'}</button>
+                                <span class="bg-amber-200 text-amber-900 px-3 py-1 rounded-full font-black text-sm">⭐ ${fmtNum(state.totalStars)}</span>
+                            </div>
+                        </div>
+
+                        ${stickersHTML()}
+
+                        <h2 class="text-xl font-black text-purple-700 mb-4">اختر مغامرتك اليوم!</h2>
+
+                        <div class="grid grid-cols-2 gap-3 mb-4">
+                            <button onclick="openSettings('numbers', 'قراءة الأعداد')" class="p-3.5 bg-white border-2 border-purple-200 rounded-2xl font-bold text-purple-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">🔢</span>
+                                <span class="text-sm">قراءة الأعداد</span>
+                            </button>
+                            <button onclick="openSettings('addition', 'مغامرة الجمع')" class="p-3.5 bg-white border-2 border-emerald-200 rounded-2xl font-bold text-emerald-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">➕</span>
+                                <span class="text-sm">الجمع</span>
+                            </button>
+                            <button onclick="openSettings('subtraction', 'مغامرة الطرح')" class="p-3.5 bg-white border-2 border-rose-200 rounded-2xl font-bold text-rose-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">➖</span>
+                                <span class="text-sm">الطرح</span>
+                            </button>
+                            <button onclick="openSettings('multiplication', 'مغامرة الضرب')" class="p-3.5 bg-white border-2 border-blue-200 rounded-2xl font-bold text-blue-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">✖️</span>
+                                <span class="text-sm">الضرب</span>
+                            </button>
+                            <button onclick="openSettings('division', 'مغامرة القسمة')" class="p-3.5 bg-white border-2 border-amber-200 rounded-2xl font-bold text-amber-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">➗</span>
+                                <span class="text-sm">القسمة</span>
+                            </button>
+                            <button onclick="openSettings('fractions', 'الكسور')" class="p-3.5 bg-white border-2 border-pink-200 rounded-2xl font-bold text-pink-800 btn-hover flex flex-col items-center justify-center gap-1.5 shadow-sm">
+                                <span class="text-2xl">🍰</span>
+                                <span class="text-sm">الكسور</span>
+                            </button>
+                        </div>
+
+                        <button onclick="openSettings('compare', 'مقارنة الأعداد')" class="w-full p-3 bg-white border-2 border-teal-200 text-teal-800 rounded-2xl font-bold btn-hover shadow-sm mb-3 flex items-center justify-center gap-2">
+                            <span class="text-xl">⚖️</span>
+                            <span class="text-sm">مقارنة الأعداد</span>
+                        </button>
+
+                        <button onclick="openSettings('placeValue', 'القيمة المنزلية')" class="w-full p-3 bg-white border-2 border-indigo-200 text-indigo-800 rounded-2xl font-bold btn-hover shadow-sm mb-3 flex items-center justify-center gap-2">
+                            <span class="text-xl">🏠</span>
+                            <span class="text-sm">القيمة المنزلية</span>
+                        </button>
+
+                        <button onclick="openSettings('hero', 'تحدي الأبطال')" class="w-full p-3.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl font-black btn-hover shadow-md mb-4 flex items-center justify-center gap-2">
+                            <span class="text-xl">🏆</span>
+                            <span>تحدي الأبطال الشامل</span>
+                        </button>
+
+                        <div class="flex justify-center items-center gap-4">
+                            <button onclick="goBackToWelcome()" class="text-gray-500 font-bold text-xs hover:text-gray-700">تغيير الاسم</button>
+                            ${state.confirmReset ? `
+                                <span class="text-xs font-bold text-rose-600">متأكد؟</span>
+                                <button onclick="resetProgress()" class="text-rose-600 font-black text-xs">نعم، امسح</button>
+                                <button onclick="state.confirmReset=false; render();" class="text-gray-500 font-bold text-xs">إلغاء</button>
+                            ` : `
+                                <button onclick="state.confirmReset=true; render();" class="text-gray-500 font-bold text-xs hover:text-gray-700">مسح نجومي</button>
+                            `}
+                        </div>
+                    </div>
+                `;
+            } else if (state.screen === 'settings') {
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-6 animate-pop">
+                        <h2 class="text-2xl font-black text-purple-700 text-center mb-6">${state.categoryTitle}</h2>
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">مستوى الصعوبة</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setDiff('easy')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.difficulty === 'easy' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">سهل</button>
+                                <button onclick="setDiff('medium')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.difficulty === 'medium' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">متوسط</button>
+                                <button onclick="setDiff('hard')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.difficulty === 'hard' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">صعب</button>
+                                <button onclick="setDiff('custom')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.difficulty === 'custom' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">مخصص</button>
+                            </div>
+                        </div>
+
+                        ${state.settings.difficulty === 'custom' ? `
+                            <div class="mb-4 bg-purple-50 p-3 rounded-2xl border border-purple-200">
+                                <label class="block text-xs font-bold text-purple-800 mb-2">تخصيص نطاق الأرقام:</label>
+                                <div class="flex gap-2 items-center">
+                                    <span class="text-xs font-bold">من:</span>
+                                    <input type="number" id="customMinInput" value="${state.settings.customMin}" onchange="setCustomRange()" class="w-1/2 p-2 rounded-xl border border-purple-300 text-center font-bold">
+                                    <span class="text-xs font-bold">إلى:</span>
+                                    <input type="number" id="customMaxInput" value="${state.settings.customMax}" onchange="setCustomRange()" class="w-1/2 p-2 rounded-xl border border-purple-300 text-center font-bold">
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">نوع الأسئلة</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setQType('choice')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.qType === 'choice' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">اختيار من متعدد</button>
+                                <button onclick="setQType('input')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.qType === 'input' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">كتابة الإجابة</button>
+                            </div>
+                        </div>
+
+                        <div class="mb-4">
+                            <label class="block text-sm font-bold text-gray-700 mb-2">شكل الأرقام</label>
+                            <div class="grid grid-cols-2 gap-2">
+                                <button onclick="setNumFormat('ar')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.numFormat === 'ar' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">أرقام عربية (١٢٣)</button>
+                                <button onclick="setNumFormat('en')" class="py-2.5 rounded-xl font-bold text-sm transition ${state.settings.numFormat === 'en' ? 'bg-purple-600 text-white shadow-md' : 'bg-white text-purple-800 border border-purple-300'}">أرقام إنجليزية (123)</button>
+                            </div>
+                        </div>
+
+                        <div class="mb-6">
+                            <div class="flex justify-between items-center mb-2">
+                                <label class="text-sm font-bold text-gray-700">عدد الأسئلة</label>
+                                <span class="font-black text-purple-700 text-lg">${fmtNum(state.settings.count)}</span>
+                            </div>
+                            <input type="range" min="5" max="20" value="${state.settings.count}" oninput="setCount(this.value)" class="w-full accent-purple-600 cursor-pointer">
+                        </div>
+
+                        <div class="space-y-3">
+                            <button onclick="startGame()" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-black text-lg btn-hover shadow-lg">
+                                ابدأ اللعبة 🎮
+                            </button>
+                            <button onclick="state.screen='categories'; render();" class="w-full py-3 bg-gray-100 text-gray-700 rounded-2xl font-bold hover:bg-gray-200 transition">
+                                رجوع
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (state.screen === 'game') {
+                const q = state.gameData.questions[state.gameData.currentIndex];
+                const total = state.gameData.questions.length;
+                const progress = ((state.gameData.currentIndex + 1) / total) * 100;
+                const fb = state.gameData.feedback;
+
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-6 relative overflow-hidden animate-pop">
+                        ${fb ? `
+                            <div class="absolute inset-0 bg-white/95 backdrop-blur-md z-20 flex flex-col items-center justify-center p-6 text-center animate-pop">
+                                <div class="text-6xl mb-3">${fb.isCorrect ? '⭐🎉' : '💪❌'}</div>
+                                <h3 class="text-2xl font-black ${fb.isCorrect ? 'text-emerald-600' : 'text-rose-600'} mb-2">${fb.msg}</h3>
+                                ${state.newSticker ? `<div class="bg-amber-100 border-2 border-amber-300 rounded-2xl px-4 py-3 mb-4 animate-pop"><div class="text-4xl">${state.newSticker.emoji}</div><p class="font-black text-amber-900 text-sm">فتحت ملصق ${state.newSticker.name}! 🎁</p></div>` : ''}
+                                ${!fb.isCorrect ? `<p class="text-gray-600 font-bold mb-4">الإجابة الصحيحة هي: ${q.isCompare ? compareLabel(fb.correctAns) : fmtNum(fb.correctAns)}</p>` : ''}
+                                <button onclick="proceedNext()" class="px-8 py-3 bg-purple-600 text-white rounded-2xl font-black text-lg btn-hover shadow-lg">
+                                    السؤال التالي ➡️
+                                </button>
+                            </div>
+                        ` : ''}
+
+                        <div class="flex justify-between items-center mb-4 text-sm font-black text-purple-900">
+                            <span>السؤال ${fmtNum(state.gameData.currentIndex + 1)} من ${fmtNum(total)}</span>
+                            <span class="text-amber-600">⭐ ${fmtNum(state.gameData.score)}</span>
+                        </div>
+                        <div class="w-full bg-purple-200 h-3 rounded-full mb-6 overflow-hidden">
+                            <div class="bg-purple-600 h-full transition-all duration-300" style="width: ${progress}%"></div>
+                        </div>
+
+                        <div class="bg-purple-50 border-2 border-purple-200 rounded-2xl p-6 text-center mb-6 shadow-inner">
+                            <h3 class="text-2xl font-black text-purple-900 mb-1" dir="auto">${q.questionText}</h3>
+                            ${q.fraction ? fractionSVG(q.fraction.num, q.fraction.d) : ''}
+                            <button onclick="speakQuestion()" class="mt-3 px-4 py-2 bg-white border-2 border-purple-300 rounded-full font-bold text-sm text-purple-800 btn-hover shadow-sm">🔈 اسمع السؤال</button>
+                        </div>
+
+                        ${(state.settings.qType === 'choice' || q.isCompare) ? `
+                            <div class="grid ${q.isCompare ? 'grid-cols-1' : 'grid-cols-2'} gap-3 mb-6">
+                                ${q.options.map(opt => `
+                                    <button onclick="checkAnswer('${opt}')" class="p-4 bg-white border-2 border-purple-300 hover:border-purple-600 rounded-2xl font-black text-xl text-purple-900 btn-hover shadow-sm">
+                                        ${q.isCompare ? compareLabel(opt) : fmtNum(opt)}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div class="mb-6 space-y-3">
+                                <input type="text" id="userInputAnswer" placeholder="اكتب الناتج هنا..." class="w-full p-4 rounded-2xl border-2 border-purple-300 text-center text-2xl font-black text-purple-900 bg-white focus:outline-none focus:border-purple-600">
+                                <button onclick="checkInputAnswer()" class="w-full py-4 bg-purple-600 text-white rounded-2xl font-black text-lg btn-hover shadow-md">
+                                    تحقق من الإجابة ✅
+                                </button>
+                            </div>
+                        `}
+
+                        <button onclick="state.screen='categories'; render();" class="w-full py-2 text-gray-500 font-bold text-sm hover:text-gray-700">إنهاء اللعبة والعودة</button>
+                    </div>
+                `;
+            } else if (state.screen === 'review') {
+                const wrongs = state.gameData.wrong;
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-6 text-center animate-pop">
+                        <div class="text-5xl mb-2">📝</div>
+                        <h2 class="text-2xl font-black text-purple-800 mb-1">راجع أخطاءك يا بطل</h2>
+                        <p class="text-gray-600 font-bold text-sm mb-4">هذه الأسئلة تحتاج محاولة ثانية، وأنت قدها! 💪</p>
+                        <div class="space-y-2 mb-5 max-h-64 overflow-y-auto">
+                            ${wrongs.map(q => `
+                                <div class="bg-purple-50 border border-purple-200 rounded-2xl p-3">
+                                    <p class="font-black text-purple-900 text-sm" dir="auto">${q.questionText}</p>
+                                    <p class="font-bold text-emerald-700 text-sm mt-1">الإجابة: ${q.isCompare ? compareLabel(q.correctAnswer) : fmtNum(q.correctAnswer)}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="space-y-3">
+                            <button onclick="retryMistakes()" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-black text-lg btn-hover shadow-lg">
+                                أعد المحاولة على أخطائي 🔁
+                            </button>
+                            <button onclick="skipReview()" class="w-full py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold hover:bg-gray-300">
+                                متابعة
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (state.screen === 'badge') {
+                let badgeTitle = '';
+                let badgeDesc = '';
+                let badgeEmoji = '';
+                if (state.settings.difficulty === 'easy') {
+                    badgeTitle = 'أنت نجم الرياضيات ⭐';
+                    badgeDesc = 'أداء رائع في المستوى السهل!';
+                    badgeEmoji = '🌟';
+                } else if (state.settings.difficulty === 'medium') {
+                    badgeTitle = 'أنت رائع 🌟';
+                    badgeDesc = 'تميزت في المستوى المتوسط ببراعة!';
+                    badgeEmoji = '🏅';
+                } else {
+                    badgeTitle = 'مبدع ومتميز 🏆';
+                    badgeDesc = 'تخطيت المستوى الصعب بذكاء خارق!';
+                    badgeEmoji = '👑';
+                }
+
+                app.innerHTML = `
+                    <div class="glass-card rounded-3xl p-8 text-center animate-pop">
+                        <div class="text-6xl mb-4 animate-bounce">${badgeEmoji}</div>
+                        <h2 class="text-3xl font-black text-purple-800 mb-2">${badgeTitle}</h2>
+                        <p class="text-gray-700 font-bold mb-6">${badgeDesc}</p>
+                        
+                        <div class="bg-amber-100 border-2 border-amber-300 p-4 rounded-2xl mb-6">
+                            <p class="text-amber-900 font-black text-lg">النتيجة: ${fmtNum(state.gameData.score)} من ${fmtNum(state.gameData.questions.length)}</p>
+                        </div>
+
+                        <div class="space-y-3">
+                            <button onclick="proceedToCertificate()" class="w-full py-4 bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-2xl font-black text-lg btn-hover shadow-lg">
+                                عرض شهادة نجم الرياضيات 🎓
+                            </button>
+                            <button onclick="state.screen='categories'; render();" class="w-full py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold hover:bg-gray-300">
+                                العودة للأقسام
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else if (state.screen === 'certificate') {
+                app.innerHTML = `
+                    <div id="printable-certificate" class="glass-card rounded-3xl p-6 text-center border-4 border-amber-400 bg-white shadow-2xl relative animate-pop">
+                        <div class="text-4xl mb-1">🌸 🏆 🌸</div>
+                        <h2 class="text-2xl font-black text-purple-900 mb-1">شهادة نجم الرياضيات</h2>
+                        <p class="text-xs text-gray-500 mb-4">تُمنح هذه الشهادة بكل فخر إلى البطل:</p>
+                        
+                        <div class="text-2xl font-black text-indigo-700 bg-purple-50 py-3 px-6 rounded-2xl border-2 border-purple-200 mb-4 inline-block shadow-inner">
+                            ${state.playerName}
+                        </div>
+                        
+                        <p class="text-xs text-gray-700 font-bold mb-4">تقديرًا لإبداعه ومشاركته المتميزة في أنشطة (${state.categoryTitle})</p>
+                        
+                        <div class="text-amber-500 text-lg mb-4">⭐ 🌟 ⭐</div>
+                        
+                        <hr class="border-purple-200 mb-4">
+                        
+                        <div class="bg-purple-100 py-2.5 px-4 rounded-2xl border border-purple-300 inline-block mb-3">
+                            <p class="text-xs font-black text-purple-800">إعداد المعلمة / أريج شديد الرفاعي</p>
+                        </div>
+                        <p class="text-[10px] text-gray-400">صُممت بمحبة لنجوم الرياضيات 💜</p>
+                    </div>
+
+                    <div class="mt-5 space-y-2 no-print">
+                        <button onclick="downloadCertificateImage()" class="w-full py-3.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-2xl font-black text-md btn-hover shadow-md flex items-center justify-center gap-2">
+                            <span>📸</span> حفظ الشهادة كصورة (SVG)
+                        </button>
+                        <button onclick="window.print()" class="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-md btn-hover shadow-md flex items-center justify-center gap-2">
+                            <span>🖨️</span> طباعة الشهادة
+                        </button>
+                        <button onclick="state.screen='categories'; render();" class="w-full py-3 bg-gray-200 text-gray-700 rounded-2xl font-bold hover:bg-gray-300 transition">
+                            العودة للقائمة الرئيسية 🏠
+                        </button>
+                    </div>
+                `;
+            }
+        }
+
+        function startJourney() {
+            const input = document.getElementById('playerNameInput');
+            if (!input.value.trim()) {
+                state.errorMsg = 'الرجاء كتابة اسم البطل أولاً!';
+                render();
+                return;
+            }
+            state.errorMsg = '';
+            state.playerName = input.value.trim();
+            state.totalStars = readProgress().players[state.playerName] || 0;
+            saveProgress();
+            state.screen = 'categories';
+            render();
+        }
+
+        function goBackToWelcome() {
+            state.screen = 'welcome';
+            render();
+        }
+
+        function openSettings(catKey, catTitle) {
+            state.currentCategory = catKey;
+            state.categoryTitle = catTitle;
+            state.screen = 'settings';
+            render();
+        }
+
+        function setDiff(diff) {
+            state.settings.difficulty = diff;
+            render();
+        }
+
+        function setCustomRange() {
+            const minEl = document.getElementById('customMinInput');
+            const maxEl = document.getElementById('customMaxInput');
+            if (minEl && maxEl) {
+                state.settings.customMin = parseInt(minEl.value) || 1;
+                state.settings.customMax = parseInt(maxEl.value) || 20;
+            }
+        }
+
+        function setQType(type) {
+            state.settings.qType = type;
+            render();
+        }
+
+        function setNumFormat(fmt) {
+            state.settings.numFormat = fmt;
+            render();
+        }
+
+        function setCount(val) {
+            state.settings.count = parseInt(val);
+            render();
+        }
+
+        function startGame() {
+            state.reviewMode = false;
+            const count = state.settings.count;
+            const diff = state.settings.difficulty;
+            let questions = [];
+
+            let minNum = 1, maxNum = 10;
+            if (diff === 'medium') { minNum = 1; maxNum = 50; }
+            if (diff === 'hard') { minNum = 1; maxNum = 100; }
+            if (diff === 'custom') { minNum = state.settings.customMin; maxNum = state.settings.customMax; }
+
+            let maxMul = 5;
+            if (diff === 'medium') maxMul = 9;
+            if (diff === 'hard') maxMul = 12;
+            if (diff === 'custom') maxMul = Math.min(12, Math.max(3, Math.floor(maxNum / 2)));
+
+            for (let i = 0; i < count; i++) {
+                let n1 = Math.floor(Math.random() * (maxNum - minNum + 1)) + minNum;
+                let n2 = Math.floor(Math.random() * (maxNum - minNum + 1)) + minNum;
+                let qText = '';
+                let ans = 0;
+                let fracData = null;
+                let isCompare = false;
+
+                let activeCat = state.currentCategory;
+                if (activeCat === 'hero') {
+                    const cats = ['numbers', 'addition', 'subtraction', 'multiplication', 'division', 'placeValue', 'compare'];
+                    activeCat = cats[Math.floor(Math.random() * cats.length)];
+                }
+
+                if (activeCat === 'numbers') {
+                    const numSubTypes = ['next', 'prev', 'between'];
+                    const subType = numSubTypes[Math.floor(Math.random() * numSubTypes.length)];
+                    
+                    if (subType === 'next') {
+                        qText = `ما هو العدد الذي يلي ${fmtNum(n1)}؟`;
+                        ans = n1 + 1;
+                    } else if (subType === 'prev') {
+                        let base = n1 <= minNum ? minNum + 1 : n1;
+                        qText = `ما هو العدد الذي يسبق ${fmtNum(base)}؟`;
+                        ans = base - 1;
+                    } else {
+                        let first = n1;
+                        let third = n1 + 2;
+                        qText = `ما هو العدد الواقع بين ${fmtNum(first)} و ${fmtNum(third)}؟`;
+                        ans = n1 + 1;
+                    }
+                } else if (activeCat === 'addition') {
+                    qText = `${fmtNum(n1)} + ${fmtNum(n2)} = ؟`;
+                    ans = n1 + n2;
+                } else if (activeCat === 'subtraction') {
+                    if (n1 < n2) [n1, n2] = [n2, n1];
+                    qText = `${fmtNum(n1)} - ${fmtNum(n2)} = ؟`;
+                    ans = n1 - n2;
+                } else if (activeCat === 'multiplication') {
+                    let m1 = Math.floor(Math.random() * maxMul) + 1;
+                    let m2 = Math.floor(Math.random() * maxMul) + 1;
+                    qText = `${fmtNum(m1)} × ${fmtNum(m2)} = ؟`;
+                    ans = m1 * m2;
+                } else if (activeCat === 'division') {
+                    let divisor = Math.floor(Math.random() * maxMul) + 1;
+                    let quotient = Math.floor(Math.random() * maxMul) + 1;
+                    let dividend = divisor * quotient;
+                    qText = `${fmtNum(dividend)} ÷ ${fmtNum(divisor)} = ؟`;
+                    ans = quotient;
+                } else if (activeCat === 'fractions') {
+                    const denoms = [2, 3, 4, 5];
+                    const d = denoms[Math.floor(Math.random() * denoms.length)];
+                    const num = Math.floor(Math.random() * (d - 1)) + 1;
+                    qText = `ما هو البسط (الجزء المظلل) في الكسر ${fmtNum(num)} من ${fmtNum(d)}؟`;
+                    ans = num;
+                    fracData = { num: num, d: d };
+                } else if (activeCat === 'compare') {
+                    if (Math.random() < 0.15) n2 = n1;
+                    isCompare = true;
+                    qText = `أكمل: العدد ${fmtNum(n1)} ...... العدد ${fmtNum(n2)}`;
+                    ans = n1 > n2 ? 1 : (n1 < n2 ? 2 : 3);
+                } else if (activeCat === 'placeValue') {
+                    const tens = Math.floor(Math.random() * 9) + 1;
+                    const ones = Math.floor(Math.random() * 9) + 1;
+                    const totalVal = tens * 10 + ones;
+                    qText = `في العدد ${fmtNum(totalVal)}، كم عدد العشرات؟`;
+                    ans = tens;
+                }
+
+                let options = isCompare ? [1, 2, 3] : [ans];
+                while (options.length < 4 && !isCompare) {
+                    let wrong = ans + (Math.floor(Math.random() * 7) - 3);
+                    if (wrong !== ans && wrong >= 0 && !options.includes(wrong)) {
+                        options.push(wrong);
+                    }
+                }
+                if (!isCompare) options.sort(() => Math.random() - 0.5);
+
+                questions.push({
+                    questionText: qText,
+                    correctAnswer: ans,
+                    fraction: fracData,
+                    isCompare: isCompare,
+                    options: options
+                });
+            }
+
+            state.gameData = {
+                currentIndex: 0,
+                score: 0,
+                questions: questions,
+                wrong: [],
+                feedback: null
+            };
+            state.screen = 'game';
+            render();
+        }
+
+        const successPhrases = ['كفو يا بطل! 🌟', 'ممتاز جداً! 👏', 'إجابة مبهرة! ⭐', 'رائع يا بطل الأبطال! 🏆', 'أحسنت صنعاً! 💜'];
+        const trialPhrases = ['حاول مرة أخرى في القادمة! 💪', 'لا بأس، استمر في المحاولة! 🌱'];
+
+        function checkAnswer(selectedOpt) {
+            const currentQ = state.gameData.questions[state.gameData.currentIndex];
+            const isCorrect = parseInt(selectedOpt) === currentQ.correctAnswer;
+            if (isCorrect) {
+                playSound('correct'); launchConfetti(40);
+                state.gameData.score++;
+                if (!state.reviewMode) { state.totalStars++; checkStickers(); saveProgress(); }
+                const msg = successPhrases[Math.floor(Math.random() * successPhrases.length)];
+                state.gameData.feedback = { isCorrect: true, msg: msg };
+            } else {
+                playSound('wrong');
+                const msg = trialPhrases[Math.floor(Math.random() * trialPhrases.length)];
+                state.gameData.wrong.push(currentQ);
+                state.gameData.feedback = { isCorrect: false, msg: msg, correctAns: currentQ.correctAnswer };
+            }
+            render();
+        }
+
+        function checkInputAnswer() {
+            const inputVal = document.getElementById('userInputAnswer').value;
+            if (inputVal === '') return;
+            const val = parseArNum(inputVal);
+            const currentQ = state.gameData.questions[state.gameData.currentIndex];
+            const isCorrect = val === currentQ.correctAnswer;
+            if (isCorrect) {
+                playSound('correct'); launchConfetti(40);
+                state.gameData.score++;
+                if (!state.reviewMode) { state.totalStars++; checkStickers(); saveProgress(); }
+                const msg = successPhrases[Math.floor(Math.random() * successPhrases.length)];
+                state.gameData.feedback = { isCorrect: true, msg: msg };
+            } else {
+                playSound('wrong');
+                const msg = trialPhrases[Math.floor(Math.random() * trialPhrases.length)];
+                state.gameData.wrong.push(currentQ);
+                state.gameData.feedback = { isCorrect: false, msg: msg, correctAns: currentQ.correctAnswer };
+            }
+            render();
+        }
+
+        function proceedNext() {
+            if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            state.gameData.feedback = null;
+            state.newSticker = null;
+            state.gameData.currentIndex++;
+            if (state.gameData.currentIndex < state.gameData.questions.length) {
+                render();
+                return;
+            }
+            playSound('win');
+            launchConfetti(120);
+            if (state.reviewMode) {
+                state.reviewMode = false;
+                state.screen = 'categories';
+            } else if (state.gameData.wrong.length > 0) {
+                state.screen = 'review';
+            } else {
+                finishToReward();
+            }
+            render();
+        }
+
+        function finishToReward() {
+            state.screen = state.settings.difficulty === 'custom' ? 'certificate' : 'badge';
+        }
+
+        function retryMistakes() {
+            state.reviewMode = true;
+            state.gameData = {
+                currentIndex: 0,
+                score: 0,
+                questions: state.gameData.wrong.slice(),
+                wrong: [],
+                feedback: null
+            };
+            state.screen = 'game';
+            render();
+        }
+
+        function skipReview() {
+            finishToReward();
+            render();
+        }
+
+        function resetProgress() {
+            state.totalStars = 0;
+            state.confirmReset = false;
+            saveProgress();
+            render();
+        }
+
+        function proceedToCertificate() {
+            state.screen = 'certificate';
+            render();
+        }
+
+        function downloadCertificateImage() {
+            const htmlContent = `<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600">
+                <foreignObject width="100%" height="100%">
+                    <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: 'Cairo', sans-serif; background: #fff; padding: 40px; text-align: center; border: 8px solid #fbbf24; border-radius: 24px; height: 100%; box-sizing: border-box;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">🌸 🏆 🌸</div>
+                        <h1 style="font-size: 32px; color: #581c87; margin-bottom: 5px;">شهادة نجم الرياضيات</h1>
+                        <p style="font-size: 14px; color: #6b7280; margin-bottom: 20px;">تُمنح هذه الشهادة بكل فخر إلى البطل:</p>
+                        <div style="font-size: 28px; font-weight: bold; color: #4338ca; background: #f3e8ff; padding: 10px 30px; border-radius: 16px; display: inline-block; margin-bottom: 20px; border: 2px solid #d8b4fe;">${state.playerName}</div>
+                        <p style="font-size: 16px; color: #374151; font-weight: bold; margin-bottom: 20px;">تقديرًا لإبداعه ومشاركته المتميزة في أنشطة (${state.categoryTitle})</p>
+                        <div style="font-size: 24px; color: #f59e0b; margin-bottom: 25px;">⭐ 🌟 ⭐</div>
+                        <hr style="border: 1px solid #e9d5ff; margin-bottom: 20px;"/>
+                        <div style="background: #f3e8ff; padding: 10px 20px; border-radius: 12px; display: inline-block; border: 1px solid #d8b4fe;">
+                            <p style="font-size: 14px; font-weight: bold; color: #581c87; margin: 0;">إعداد المعلمة / أريج شديد الرفاعي</p>
+                        </div>
+                        <p style="font-size: 10px; color: #9ca3af; margin-top: 10px;">صُممت بمحبة لنجوم الرياضيات 💜</p>
+                    </div>
+                </foreignObject>
+            </svg>`;
+
+            const blob = new Blob([htmlContent], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `شهادة_نجم_الرياضيات_${state.playerName}.svg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        window.onload = () => { loadProgress(); render(); };
+    </script>
+</body>
+</html>
